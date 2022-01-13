@@ -14,7 +14,7 @@
 The project focuses on the Exploratory Data Analysis (EDA) of the given Performance dataset, which includes marks obtained by students in different subjects. The aim was to first clean (if necessary) the data and then perform a full Exploratory Data Analysis (with summary statistics, plots and statistical hypothesis testing), which would help to understand the variation within the variables. Additionally, it was requested to find correlations or any patterns between variables if they exist, and more depending on the questions that will be raised.
 
 ## Data Availability
-The data can be obtained from [Kaggle](https://www.kaggle.com/spscientist/students-performance-in-exams/code?datasetId=74977&sortBy=voteCount).
+The data was directly obtained from [Kaggle](https://www.kaggle.com/spscientist/students-performance-in-exams/code?datasetId=74977&sortBy=voteCount).
 
 ## Methodology
 Some of the key methods which were used throughout the work are:
