@@ -1,9 +1,8 @@
 # Students-Performance-in-Exams-Exploratory-Data-Analysis
 
 <p align="center">
-  <img src="https://github.com/nikopetr/Students-Performance-in-Exams-Exploratory-Data-Analysis/blob/main/images/geometry-g4669eac9d_1920.jpg width="800" height="400"/>
+  <img src="https://github.com/nikopetr/Students-Performance-in-Exams-Exploratory-Data-Analysis/blob/main/images/geometry-g4669eac9d_1920.jpg" width="800" height="400"/>
 </p>
-
 
 **Author**: Nikolas Petrou, MSc in Data Science
 
@@ -16,3 +15,10 @@ The project focuses on the Exploratory Data Analysis (EDA) of the given Performa
 
 ## Data Availability
 The data can be obtained from [Kaggle](https://www.kaggle.com/spscientist/students-performance-in-exams/code?datasetId=74977&sortBy=voteCount).
+
+## Methodology
+Some of the key methods which were used throughout the work are:
+- Data cleaning
+- Visualization - EDA
+- Summary statistics & Statistical Hypothesis Testing
+- Feature importance using Linear-Lasso Regression and Gradient Boosting Machine
