@@ -1,7 +1,7 @@
 # Students-Performance-in-Exams-Exploratory-Data-Analysis
 
 <p align="center">
-  <img src="https://github.com/nikopetr/EDA-and-Sentiment-Analysis-on-IMDB-Dataset/blob/main/tv-gcd05f2dbf_1920.jpg" width="800" height="400"/>
+  <img src="https://github.com/nikopetr/Students-Performance-in-Exams-Exploratory-Data-Analysis/blob/main/images/geometry-g4669eac9d_1920.jpg width="800" height="400"/>
 </p>
 
 
