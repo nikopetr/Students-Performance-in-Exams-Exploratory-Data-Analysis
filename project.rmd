@@ -1,0 +1,1515 @@
+---
+title: "Students Performance in Exams: Exploratory Data Analysis"
+author: "Nikolas Petrou"
+date: "13/10/2021"
+output:
+  html_document: 
+    toc: true
+    toc_depth: 3
+  word_document: default
+  pdf_document: default
+---
+
+# Introduction
+This work is a project for the **DSC531: Statistical Simulation course**. The project focuses on the Exploratory Data Analysis (EDA) of the given Performance dataset, which includes marks obtained by students in different subjects.
+
+The aim was to first clean (if necessary) the data and then perform a full Exploratory Data Analysis (with summary statistics, plots and statistical hypothesis testing), which would help to understand the variation within the variables. Additionally, it was requested to find correlations or any patterns between variables if they exist, and more depending on the questions that will be raised.
+
+# Requirements and libraries
+```{r include = FALSE}
+# Will make the plots fit better in the rmarkdown document
+knitr::opts_chunk$set(fig.height = 7, fig.width = 15)
+```
+
+The current list of objects from the environment are removed, in order to ensure a clean R environment before any operations
+```{r}
+# Remove the list of objects from the environment, just to
+# ensure a clean R environment before any operations
+rm(list=ls())
+```
+
+The libraries which are going to used are loaded
+```{r}
+# Import library for the functionality that will render an R DataFrame as an HTML table
+# knitr create tables in LaTeX, HTML or Markdown 
+# Specifically, the function which is in interest is the knitr::kable()
+library(knitr)
+
+# Library that checks for missing values
+# Will be needed for the function miss_var_summary()
+library(naniar)
+
+# Libraries for data visualization
+library(ggplot2)
+
+# Will be using the ggarrange() function in order to draw multiple ggplots on the same plot
+library(ggpubr)
+
+# Library that is used for data manipulation
+# Will mainly be used for the pipeline operations %>% and for the filter() and bind() functions
+library(dplyr)    
+
+# Library that which will be used to look at the samples' skewness
+library(moments)
+
+# The library of 'fastDummies' will be utilized in order to obtain
+# the one-hot representation of the categorical variables
+library(fastDummies)
+
+# The corrplot package provided a visual exploratory tool on correlation matrix 
+# which helped on the detection of hidden patterns among variables
+library('corrplot') 
+
+# Companion to Applied Regression package
+library('car')
+
+# For the Linear Models which use Lasso, the glmnet library utilized, 
+# which provides efficient procedures for fitting Linear Regression models
+library(glmnet)
+
+# Using the gbm for the boosting models, specifically for the gradient boosting trees
+library(gbm)
+
+# Package that has functions to streamline the model training process for complex regression and classification problems
+library(caret)
+```
+
+Setting a seed to make the script reproducible
+```{r}
+# Make the script reproducible
+set.seed(420)
+```
+
+# The Students Perfomance dataset
+
+The Performance dataset consists of the marks secured by students in various subjects. It is already known and given, that the variables in the data are: 
+
+* Gender
+* Race/ethnicity as a group variable
+* Level of education of parents
+* Quality of lunch taken
+* Whether the student has completed a test preparation course
+* The students’ scores for:
+    + mathematics
+    + reading
+    + writing
+
+## Data Load and Missing Values
+Initially, the dataset was loaded directly from the csv file which contained the Performance dataset
+```{r}
+# Read the Performance dataset from the csv file
+data <- read.csv('Performance.csv', header = TRUE)
+# Confirming that the occurred data variable is a DataFrame
+class(data)
+```
+
+The first ten rows of the dataframe are presented with the utilization of the _**kable**_ table generator
+```{r}
+# Observation of the dataset
+# Printing the first ten rows-data points of the dataset
+kable(head(data, 10))
+```
+
+It was noticed that indeed the columns-variables are the eight variables which were described earlier.
+
+Next, it was examined whether the data had missing (NA) values. The _**miss_var_summary()**_ function of the _**naniar**_ package was used in order to summarize the missing values in each variable.
+```{r}
+# Confirming that the dataset has no NA values
+miss_var_summary(data)   # Get a summary for the missing values of the different variables
+cat('Total null values in dataset:', sum(is.na(data))) 
+
+# Heatplot of missingness across the entire data frame
+vis_miss(data) 
+```
+
+Fortunately, there were no missing values at all. Therefore no imputation was needed for the values of the different variables.  
+
+## Structure of Data and Variables 
+Following, the structure and types of the variables are going to be studied.
+```{r}
+# Observe the structure and data type of each column of the DataFrame,
+# by utilizing the str() function
+str(data)
+```
+
+Since it was concluded that for different versions of R, sometimes categorical columns were not directly loaded as Factors but as characters, the specific found columns were manually casted to Factors
+```{r}
+# Loops through the columns of the DataFrame and for the character
+# and change their type to Factors
+for (colname in colnames(data)){
+  # Checks if the column is from the character class
+  # and changes its type to Factor
+  if (class(data[[colname]]) == "character")
+    data[[colname]] <- as.factor(data[[colname]])
+}
+```
+
+```{r}
+# Observe the structure and data type of each column of the DataFrame,
+# by utilizing the str() function
+str(data)
+```
+
+As it is shown, there are 1000 datapoints-observations in the dataset.
+
+Additionally, the three score variables math.score, reading,score, writing,score) were integers, while the rest of the variables (gender, race.ethnicity, parental.level.of.education, lunch, test.preparation.course) were Factors (variables that are used to categorize the stored data).
+
+The Factor levels of the categorical variables were inspected, in order to distinguish the unique values of the categorical variables
+```{r}
+# Loops through the columns of the DataFrame and for the factor columns prints 
+# the different factor levels (unique values of the categorical variables)
+for (colname in colnames(data)){
+  # Checks if the column is from the factor class
+  if (class(data[[colname]]) == "factor")
+    cat("Unique values of", colname, ": ", levels(data[[colname]]), '\n')
+}
+```
+
+As it is distinguished, the different categorical variables have the following unique values:
+
+* Gender:
+    + female
+    + male 
+    
+* Race/ethnicity:
+    + group A 
+    + group B 
+    + group C 
+    + group D 
+    + group E 
+    
+* Parental level of education:
+    + associate's degree 
+    + bachelor's degree 
+    + high school master's degree 
+    + master's degree
+    + some college
+    + some high school
+    
+* Lunch:
+    + free/reduced
+    + standard
+    
+* Test preparation course:
+    + completed
+    + none
+
+From the levels of parental level of education it can be easily seen that it would make sense for its different levels-values to follow a specific order, thus to be sorted (since for example a master's degree is considered higher education than high school). 
+
+In order to accurately sort the levels of educations, some things regarding the different levels must be specified. Obviously, some high school  and high school are the lowest levels of education for the current dataset. 
+Regarding associate degrees and college diplomas, they both typically last two to three years, and they are considered as a level of qualification above a high school diploma and below a bachelor's degree. Thus, a person who has only completed some college is considered _"less educated"_ than a person who has completed an associate degree. Obviously, since a bachelor's degree requires three to four years, it will be ranked above the aforementioned levels, but below master's degree, since a bachelor's degree is pre-required in most of the master's programmes.
+
+Therefore, the order of the factors was changed into the following order:
+
+* Parental level of education:
+    + some high school
+    + high school 
+    + some college
+    + associate's degree 
+    + bachelor's degree 
+    + master's degree 
+```{r}
+# Changing the ordering of the levels for the Factor "parental.level.of.education"
+data$parental.level.of.education <- factor(data$parental.level.of.education , 
+                                           levels = c("some high school", "high school", "some college", 
+                                                      "associate's degree", "bachelor's degree", "master's degree"))
+
+# Confirmation that the order has been changed successfully
+cat("New Factor levels of", colname, ": ", levels(data$parental.level.of.education), '\n')
+```
+
+## Data summary
+Subsequently, some summary statistics were analyzed, in order to get an initial idea of how the values of the variables are distributed.
+```{r}
+# Summary for the Factor variables
+kable(summary(Filter(is.factor, data)))
+# Summary for the score integer variables
+kable(summary(Filter(is.integer, data)))
+```
+Even from a brief summary, it can be seen that the minimum of score in maths was zero, which indicates that some extreme cases exist. This is going to be further analyzed later with some visualization.
+
+Additionally, it is strange to see that most of the individuals did not take the test preparation course. Most of the parents have either completed some college or have associate's degree, while only a few have a master's degree. 
+
+# Data Statistics
+
+## Analysis of the scoring variables 
+Next, boxplots for the score variables were plotted in order to visualize the distribution of scores
+```{r}
+# boxplot for math.score
+boxplot.math.score <- ggplot(data, aes(x=math.score)) + 
+  geom_boxplot(fill='#A4A4A4', color="black") + coord_flip() +
+  labs(title="Box plot for Math scores",x="Math Scores", y = "")
+
+# boxplot for reading.score
+boxplot.reading.score<- ggplot(data, aes(x=reading.score)) + 
+  geom_boxplot(fill='#A4A4A4', color="black") + coord_flip() +
+  labs(title="Box plot for Reading Scores",x="Reading Scores", y = "")
+
+# boxplot for writing.score
+boxplot.writing.score <- ggplot(data, aes(x=writing.score)) + 
+  geom_boxplot(fill='#A4A4A4', color="black") + coord_flip() +
+  labs(title="Box plot for Writing scores",x="Writing Scores", y = "")
+
+# The three defined plots are going to be plotted on this page
+ggarrange(boxplot.writing.score,  boxplot.math.score, boxplot.reading.score,
+          ncol = 3, nrow = 1)
+```
+From the above plots, it was seen that there were values which are lower than the lower quartile (whiskey). Even though those values are more than 1.5 IQR below Q1 (Q1 - 1.5 * IQR), they are either exactly zero or above zero, which in our case is the lowest possible score a person can get. 
+
+Interpreting the above plots, looking at the values which are in the Interquartile Range (IQR), for all of the subjects most of students' scores were above 50, which is usually the pass/fail boundary in exams. Therefore, only a small portion of the students were below the pass/fail boundary 
+
+Specifically, assuming that the pass/fail boundary is the score of 50, the ratios of passed students for the subjects were calculated. In order to avoid code repetition and increase readability, two functions (check_above_fifty() and get_prop_of_passed_in_subject ()) that were multiple times used were implemented.
+
+```{r}
+# In order to avoid code repetition and increase readability, two functions that were multiple times used were implemented.
+
+# Returns true if the given x is above 50
+check_above_fifty <- function(x){
+  # Check if the given x is integer or numeric, and stop if it is not
+  stopifnot((class(x) == "integer") || (class(x) == "numeric"))
+  return (x > 50)
+}
+
+# Returns the proportion of the passed students for the given subject
+get_prop_of_passed_in_subject <- function(data, subject.score){
+  # Check if the given data is a data.frame, and stop if it is not
+  stopifnot(class(data) == "data.frame")
+  # Check if the given subject.score variable exists as a column in the data.frame data, and stop if it is not
+  stopifnot(subject.score %in% colnames(data))
+  # Counting the total students/rows that their scores were above 50 (pass/fail limit) 
+  total_students_passed <- length(Filter(check_above_fifty, data[, subject.score]))
+
+  # Returning the proportion of passed students for the given subject
+  return (total_students_passed/length(data[, subject.score]))
+}
+
+# Calculating the pass ratios for the three subjects
+pass.math <- get_prop_of_passed_in_subject(data, 'math.score')
+pass.reading <-get_prop_of_passed_in_subject(data, 'reading.score')
+pass.writing <- get_prop_of_passed_in_subject(data, 'writing.score')
+
+# Saving the values in a data.frame
+pass_ratios <- data.frame(subject=c("Maths", "Reading", "Writing"),
+                pass_rate=c(pass.math, pass.reading, pass.writing ))
+                
+# Plotting pass rates with basic ggplot barplot
+ggplot(data=pass_ratios, aes(x=subject, y=pass_rate)) +
+  geom_bar(stat="identity",  fill="steelblue") +
+  geom_text(aes(label=pass_rate), vjust=1.6, color="white", size=5) +
+  theme_minimal() + 
+  labs(title="Pass rates per subject", x="Subject", y = "Pass rate")
+```               
+In general, assuming that a score of 50 is the minimum to pass, the passing rates are good. The students which fail mostly fail on the math exams, while the reading subject seems to be the most passed subject.
+
+Next, the densities of the different scores were plotted on top of their histograms. The distribution-density of each score was visualized with a histogram. The bins of the histograms were calculated manually with the use of the __Freedman–Diaconis' rule__, which was also discussed in class and is less sensitive to outliers in data. The __Freedman–Diaconis'__ choice calculates the bin width h as: 
+$$
+h=2 \frac{\operatorname{IQR}(x)}{\sqrt[3]{n}}
+$$
+```{r}
+# Histogram with FD method and color by groups for writing scores
+breaks.writing.score <- pretty(range(data[,'writing.score']), n = nclass.FD(data[,'writing.score']), min.n = 1)
+writing.score.dens.plot <- ggplot(data, aes(x=writing.score)) + 
+ geom_histogram(aes(y=..density..), alpha=0.5, breaks = breaks.writing.score,
+                position="identity") +
+ geom_density(alpha=.2) + ggtitle("Distribution of Writing Scores") 
+
+# Histogram with FD method and color by groups for math scores
+breaks.math.score <- pretty(range(data[,'math.score']), n = nclass.FD(data[,'math.score']), min.n = 1)
+math.score.dens.plot <- ggplot(data, aes(x=math.score)) + 
+ geom_histogram(aes(y=..density..), alpha=0.5, breaks = breaks.math.score,
+                position="identity") +
+ geom_density(alpha=.2) + ggtitle("Distribution of Math Scores") 
+
+# Histogram with FD method and color by groups for reading scores
+breaks.reading.score <- pretty(range(data[,'reading.score']), n = nclass.FD(data[,'reading.score']), min.n = 1)
+reading.score.dens.plot <- ggplot(data, aes(x=reading.score)) + 
+ geom_histogram(aes(y=..density..), alpha=0.5, breaks = breaks.reading.score,
+                position="identity") +
+ geom_density(alpha=.2) + ggtitle("Distribution of Reading Scores") 
+
+
+# The three defined plots are going to be plotted on this page
+ggarrange(math.score.dens.plot,  reading.score.dens.plot, writing.score.dens.plot,
+          ncol = 3, nrow = 1)
+```
+As illustrated, the histogram of math scores has an empty gap on its left side, which indicates the low score outliers that were also observed in the boxplots. Even though all of the score variables follow a bell shaped distribution, both their boxplots and plotted densities looked a little bit negatively skewed. 
+
+The script below calculate the skewness of the samples. 
+```{r}
+# The sample skewness for writing.score  
+skewness(data$writing.score)
+# The sample skewness for math.score
+skewness(data$math.score)
+# The sample skewness for reading.score
+skewness(data$reading.score)
+```
+Indeed all the score variables were not exactly symmetric, since their skewnewss indicated that the distributions were a little negatively skewed.
+
+Since the distributions are not exactly symmetric but follow a bell shaped distribution, it was not easily distinguishable whether the distributions follow the Normal-Gaussian distribution or not. Thus, it was furthered checked if the scores follow the Normal-Gaussian distribution with more visualization and hypothesis testing.
+
+The variables were first standardized in order to have zero mean and standard deviation of one, in order to compare their densities with the density of the Standard Normal distribution. The Probability Density function (PDF) of the data was estimated, by utilizing the default Gaussian Kernel Density Estimation which computes kernel density estimates.
+```{r}
+# Arranging 3 figures in 1 rows and 3 columns
+par(mfrow=c(1,3))
+  
+# Density Estimation(Mi parametriki ektimisi spp kanonikopoiimenou deigmatos)
+
+# Density estimation of scaled Math Score
+std.ms<-scale(data$math.score)
+dens.std <- density(std.ms)
+x.data <- dens.std$x
+plot(dens.std, main="Density estimation of scaled Math Score", ylim=c(0,0.5))
+lines(x.data,dnorm(x.data), col="red")
+legend("topleft",legend=c("Standardised data", "Standard Normal"),
+       col=c("black", "red"), lty=1, cex=1.25)
+
+# Density estimation of scaled Reading Score
+std.rs<-scale(data$reading.score)
+dens.std <- density(std.rs)
+x.data <- dens.std$x
+plot(dens.std, main="Density estimation of scaled Reading Score", ylim=c(0,0.5))
+lines(x.data,dnorm(x.data), col="red")
+legend("topleft",legend=c("Standardised data", "Standard Normal"),
+       col=c("black", "red"), lty=1, cex=1.25)
+
+# Density estimation of scaled Writing Score
+std.ws<-scale(data$writing.score)
+dens.std <- density(std.ws)
+x.data <- dens.std$x
+plot(dens.std, main="Density estimation of scaled Writing Score", ylim=c(0,0.5))
+lines(x.data,dnorm(x.data), col="red")
+legend("topleft",legend=c("Standardised data", "Standard Normal"),
+       col=c("black", "red"), lty=1, cex=1.25)
+```
+The estimated PDF of the math score looks very similar with the PDF of the Standard Normal, while the other two are questionable. On that account, a Quantile-Quantile plot (QQ plot) and the non-parametric Kolmogorov-Smirnov test were employed, in order to test for normality of the distributions.
+```{r}
+# Arranging 3 figures in 1 rows and 3 columns
+par(mfrow=c(1,3))
+
+# QQ-plots for the different score variables
+# For each different score, first standardize the scores (scale and center) 
+# and compare with Normal Distribution by using a qqtest and run a Kolmogorov-Smirnov test afterwards to compare with the Normal Distribution
+
+qqnorm(std.ms,main='Normal QQ-plot of standardised Maths Score',col='deepskyblue4')
+qqline(std.ms,col='red')
+
+qqnorm(std.rs,main='Normal QQ-plot of standardised Reading Score',col='deepskyblue4')
+qqline(std.rs,col='red')
+
+qqnorm(std.ws,main='Normal QQ-plot of standardised Writing Score', col='deepskyblue4')
+qqline(std.ws,col='red')
+
+# Kolmogorov-Smirnov tests
+ks.test(std.ms,'pnorm')
+ks.test(std.rs,'pnorm')
+ks.test(std.ws,'pnorm')
+```
+The null hypothesis of the tests were that the specified score variable follows the Normal distribution (no deviation from normality).
+
+The p-values for the math score (0.297) and writing (0.06297) are larger than 0.05 (5% level of significance), therefore it was concluded that the distribution of math and writing scores were not significantly different from Normal distribution. 
+
+Regarding the scores for reading, the p-value was 0.04257 which is lower than 0.05 (5% level of significance), thus the null-hypothesis that the reading scores follow the Normal distribution was rejected.
+
+Next the mean and median were compared for the different scores.
+```{r}
+math_stats <- data.frame(subject=c('Maths', 'Maths'), metric=c('median','mean'),
+                                   metric_value=c(median(data$math.score), mean(data$math.score)))
+reading_stats <- data.frame(subject=c('Reading', 'Reading'), metric=c('median','mean'),
+                                   metric_value=c(median(data$reading.score), mean(data$reading.score)))
+writing_stats <- data.frame(subject=c('Writing', 'Writing'), metric=c('median','mean'),
+                                   metric_value=c(median(data$writing.score), mean(data$writing.score)))
+
+# Bind the two data frames by row and keep the columns (function of dplyr)
+subject_stats <- bind_rows(math_stats, reading_stats, writing_stats)
+
+# Using "position=position_dodge()" in order to have three different bars per metric 
+ggplot(data=subject_stats, aes(x=subject, fill=metric, y=metric_value)) +
+  geom_bar(stat="identity", position=position_dodge()) + 
+  guides(fill = guide_legend(title = "Metric")) +
+  geom_text(aes(label=round(metric_value, digits = 2)),  color="black", size=5, position=position_dodge(width = .9)) +
+  labs(title="Mean and median writing score per subject", x="Subject", y = "score")
+```
+The lowest median and mean scores are for maths, while the highest are for reading. That further shows that maths is the subject that most students have a hard time to deal with, while students perform better in reading.
+
+## Comparisons between males and females
+During this part of the analysis, differences between the population of males and females were explored.
+
+Following, the distribution of the two genders is presented
+```{r}
+# Cast the gender column from the data in a table-format to get the counts of each gender group
+gender_count <- table(data$gender)
+
+# Define gender columns 
+genders <- names(gender_count)
+
+# Pie chart for the gender distribution (In order to show the percentage)
+pie_data <- as.data.frame(round(gender_count/sum(gender_count)*100, digits=2)) # First cast the table to a new Data Frame with the percentages
+ggplot(data=pie_data, aes(x = "", y = Freq, fill =  Var1)) +
+  geom_col() +
+  geom_text(aes(label =  paste("", gender_count,"\n", Freq, "%")),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +  coord_polar(theta = "y") + 
+  guides(fill = guide_legend(title = "Gender")) + 
+  theme(  axis.title.x = element_blank(), axis.title.y = element_blank())
+
+```
+The frequencies of the genders in the dataset is not exactly balanced, since the females are slightly more than the males (518 to 482). This will be taken into account for the rest of the analysis.
+
+Following, the distribution of the different categorical variables by gender are illustrated by utilizing the barplot of the _ggplot_ package.
+```{r}
+# Stacked barplot with multiple groups for the race.ethnicity 
+# Using "position=position_dodge()" in order to have two different bars per group
+race.ethnicity.plt <- ggplot(data=data, aes(x=race.ethnicity, fill=gender)) +
+  geom_bar(stat="count", position=position_dodge()) + 
+  guides(fill = guide_legend(title = "Gender")) +
+  labs(title="Distribution of Ethnicities", x="race ethinicity", y = "")
+
+# Stacked barplot with multiple groups for the parental.level.of.education 
+# Using "position=position_dodge()" in order to have two different bars per group
+parental.level.of.education.plt <- ggplot(data=data, aes(x=parental.level.of.education, fill=gender)) +
+  geom_bar(stat="count", position=position_dodge()) + 
+  guides(fill = guide_legend(title = "Gender"))  +
+  labs(title="Distribution of Different PLE", x="parental level of education", y = "")
+
+# Stacked barplot with multiple groups for the test.preparation.course.plt 
+# Using "position=position_dodge()" in order to have two different bars per group
+test.preparation.course.plt <- ggplot(data=data, aes(x=test.preparation.course, fill=gender)) +
+  geom_bar(stat="count", position=position_dodge()) + 
+  guides(fill = guide_legend(title = "Gender")) +
+  labs(title="Distribution of Test Preparation Course",x="Test preperation course", y = "")
+
+# Stacked barplot with multiple groups for the lunch.plt 
+# Using "position=position_dodge()" in order to have two different bars per group
+lunch.plt <- ggplot(data=data, aes(x=lunch, fill=gender)) +
+  geom_bar(stat="count", position=position_dodge()) + 
+  guides(fill = guide_legend(title = "Gender")) +
+  labs(title="Distribution of Lunch",x="Lunch", y = "")
+
+# The three defined plots are going to be plotted on this page
+ggarrange(race.ethnicity.plt,  parental.level.of.education.plt, 
+          test.preparation.course.plt, lunch.plt,
+          ncol = 2, nrow = 2)
+```
+It can be seen that some ethnicities have more male students than females (groups A, D and E), and vice-versa (groups D, C). Also, it was mentioned that the population of males and females is not exactly balanced, thus it is not safe to draw many conclusions from the above plots. 
+
+One solution for the above mentioned issue was to plot proportions instead of the frequencies by re-scaling. 
+
+Regarding which of the who populations takes the test preparation course more, the relative proportions were plotted
+```{r}
+data %>% count(gender, test.preparation.course) %>% group_by(gender) %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot(mapping = aes(x = gender, y = test.preparation.course)) +
+  geom_tile(mapping = aes(fill = prop)) +
+  geom_text(aes(label=round(prop, digits=3)), color="white")
+```
+As it can be observed, the difference is very little between the two groups. The proportion of males which completed the test is a little bit higher compared to the females (0.361 to 0.355).
+
+Regarding which of the who populations takes the standard lunch more, the relative proportions were plotted
+```{r}
+data %>% count(gender, lunch) %>% group_by(gender) %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot(mapping = aes(x = gender, y = lunch)) +
+  geom_tile(mapping = aes(fill = prop)) +
+  geom_text(aes(label=round(prop, digits=3)), color="white")
+```
+Again, the difference is only little between the two groups. The proportion of females which have reduced lunch is a little bit higher compared to the males (0.365 to 0.344). 
+
+Succeeding, boxplots for the different score variables, were plotted gender wise. Additionally, the distribution-density of each score was visualized with a histogram. The bins of the histograms were calculated manually with the use of the __Freedman–Diaconis' metric__.
+```{r}
+# boxplot for math.score
+# Using "position=position_dodge()" in order to have a different boxplot per gender
+boxplot.gender.math.score <- ggplot(data=data, aes(x=math.score, y=gender, fill=gender)) +
+  geom_boxplot() + coord_flip() +
+  labs(title="Box plot for Math Scores",x="Math Scores", y = "Gender")
+
+# boxplot for reading.score
+# Using "position=position_dodge()" in order to have a different boxplot per gender
+boxplot.gender.reading.score<- ggplot(data=data, aes(x=reading.score, y=gender, fill=gender)) +
+  geom_boxplot() + coord_flip() +
+  labs(title="Box plot for Reading Scores",x="Reading Scores", y = "Gender")
+
+# boxplot for writing.score
+# Using "position=position_dodge()" in order to have a different boxplot per gender
+boxplot.gender.writing.score <- ggplot(data=data, aes(x=writing.score, y=gender, fill=gender)) +
+  geom_boxplot() + coord_flip() +
+  labs(title="Box plot for Writing Scores",x="Writing Scores", y = "Gender")
+
+# The three defined plots are going to be plotted on this page
+ggarrange(boxplot.gender.math.score, boxplot.gender.reading.score, boxplot.gender.writing.score,
+          ncol = 3, nrow = 1)
+```
+
+```{r}
+# Histogram with Freedman–Diaconis method and color by groups for writing scores
+breaks.writing.score <- pretty(range(data[,'writing.score']), n = nclass.FD(data[,'writing.score']), min.n = 1)
+writing.score.dens.plot <- ggplot(data, aes(x=writing.score, color=gender, fill=gender)) + 
+ geom_histogram(aes(y=..density..), alpha=0.5, breaks = breaks.writing.score,
+                position="identity") +
+ geom_density(alpha=.2) + ggtitle("Distribution of Writing Scores") 
+
+# Histogram with Freedman–Diaconis method and color by groups for math scores
+breaks.math.score <- pretty(range(data[,'math.score']), n = nclass.FD(data[,'math.score']), min.n = 1)
+math.score.dens.plot <- ggplot(data, aes(x=math.score, color=gender, fill=gender)) + 
+ geom_histogram(aes(y=..density..), alpha=0.5, breaks = breaks.math.score,
+                position="identity") +
+ geom_density(alpha=.2) + ggtitle("Distribution of Math Scores") 
+
+# Histogram with Freedman–Diaconis method and color by groups for reading scores
+breaks.reading.score <- pretty(range(data[,'reading.score']), n = nclass.FD(data[,'reading.score']), min.n = 1)
+reading.score.dens.plot <- ggplot(data, aes(x=reading.score, color=gender, fill=gender)) + 
+ geom_histogram(aes(y=..density..), alpha=0.5, breaks = breaks.reading.score,
+                position="identity") +
+ geom_density(alpha=.2) + ggtitle("Distribution of Reading Scores") 
+
+
+# The three defined plots are going to be plotted on this page
+ggarrange(math.score.dens.plot,  reading.score.dens.plot, writing.score.dens.plot,
+          ncol = 3, nrow = 1)
+```
+
+Firstly, an interesting point, is that the median and interquantile ranges (IQR) of the populations for the different scores, revealed that the females are more likely to perform better on the writing and reading exams, while the males performed better for the math exams. Those observations were then checked and confirmed with hypothesis testing. Moreover, what can be seen is that even though females performed better on writing and reading, the outliers which are more than 1.5 IQR below Q1 in the female population, are more in total compared to the males.
+
+In order to compare the scores of the two individual populations (males and females) it was decided to utilize a two sample t-test hypothesis testing. As literature suggests, t-test assumes normality in the data. During the **__Analysis of the scoring variables__** section, it was shown that only the math and writing scores were normally distributed. The scoring variables of the two individual populations (males and females) were furthered tested for their normality in order to employ the t-test and accurately compare the means of the two groups.
+ 
+A Quantile-Quantile plot (QQ plot) and the non-parametric Kolmogorov-Smirnov test were employed, in order to test for normality of the distribution for the different scores of the males
+```{r}
+# QQ-plots of Males' Performance:
+par(mfrow=c(1,3))
+
+# For each different score of the males, first standardize the scores (scale and center) 
+# and compare with Normal Distribution by using a qqtest and run a Kolmogorov-Smirnov test afterwards to compare with the Normal Distribution
+
+std.males_ms<-scale(data$math.score[data$gender=='male'])
+qqnorm(std.males_ms,main='Normal QQ-plot of standardised Maths Score of Males',col='deepskyblue4')
+qqline(std.males_ms,col='red')
+
+std.males_rs<-scale(data$reading.score[data$gender=='male'])
+qqnorm(std.males_rs,main='Normal QQ-plot of standardised Reading Score of Males',col='deepskyblue4')
+qqline(std.males_rs,col='red')
+
+std.males_ws<-scale(data$writing.score[data$gender=='male'])
+qqnorm(std.males_ws,main='Normal QQ-plot of standardised Writing Score of Males', col='deepskyblue4')
+qqline(std.males_ws,col='red')
+
+# Run the non-parametric Kolmogorov-Smirnov test to compare with the Normal Distribution
+ks.test(std.males_ms,'pnorm')
+ks.test(std.males_ws,'pnorm')
+ks.test(std.males_rs,'pnorm')
+```
+The null hypothesis of the tests were that the a specified score variable (for the males only) follows the Normal distribution.
+
+Regarding the male group, the p-values for the math score (0.4632), writing (0.4271) and reading (0.2654) are a lot larger than 0.05 (5% level of significance), therefore it was concluded that the distributions of the different scores for the males were not significantly different from Normal distribution. 
+
+A Quantile-Quantile plot (QQ plot) and the non-parametric Kolmogorov-Smirnov test were employed, in order to test for normality of the distribution for the different scores of the females.
+```{r}
+# QQ-plots of Females' Performance:
+par(mfrow=c(1,3))
+
+# For each different score of the females, first standardize the scores (scale and center) 
+# and compare with Normal Distribution by using a qqtest and run a Kolmogorov-Smirnov test afterwards to compare with the Normal Distribution
+
+std.females_ms<-scale(data$math.score[data$gender=='female'])
+qqnorm(std.females_ms,main='Normal QQ-plot of standardised Maths Score of Females',col='deepskyblue4')
+qqline(std.females_ms,col='red')
+
+std.females_rs<-scale(data$reading.score[data$gender=='female'])
+qqnorm(std.females_rs,main='Normal QQ-plot of standardised Reading Score of Females',col='deepskyblue4')
+qqline(std.females_rs,col='red')
+
+std.females_ws<-scale(data$writing.score[data$gender=='female'])
+qqnorm(std.females_ws,main='Normal QQ-plot of standardised Writing Score of Females', col='deepskyblue4')
+qqline(std.females_ws,col='red')
+
+# Run the non-parametric Kolmogorov-Smirnov test to compare with the Normal Distribution
+ks.test(std.females_ms,'pnorm')
+ks.test(std.females_ws,'pnorm')
+ks.test(std.females_rs,'pnorm')
+```
+The null hypothesis of the tests were that the a specified score variable (for the females only) follows the Normal distribution.
+
+Regarding the female group, the p-values for the math score (0.2835) and reading (0.2058) are larger than 0.05 (5% level of significance), therefore it was concluded that the distribution of math and reading scores were not significantly different from Normal distribution. 
+
+Regarding the scores for writing, the p-value was 0.04018 which is lower than 0.05 (5% level of significance), thus the null-hypothesis that the writing scores follow the Normal distribution was rejected.
+
+Therefore since for both of the individual populations, normality exists only for math and reading scores, the t-tests were employed only for those two scores.
+
+Eventually, a two sample t-test hypothesis testing had been performed in order to see if there is significant difference in the means of the two different populations (males and females) for the scores in the two subjects. 
+There are more types of t-tests, but in this case a two-sample t-test was utilized since we were interested in groups that come from two different groups.
+
+Since more t-tests were employed during the process of this analysis, and in order to avoid code repetition and increase readability, a function that runs the whole procedure dynamically has been implemented. Specifically, the implemented function __compare.populations()__ divides the data samples in to two populations, prints the mean, variance, standard deviation of the two samples and finally runs a two sample t-test.
+```{r}
+# Function that dynamically divides the data samples of the given dataframe data.df in to two populations based on group.variable. Prints summary statistics of the two samples for the variable.to.observe column and finally runs a two sample t-test
+ compare.populations <- function(data.df, group.variable, variable.to.observe){
+  
+   # Check conditions for the input of the data
+   stopifnot(class(group.variable) == "character")
+   stopifnot(class(variable.to.observe) == "character")
+   stopifnot(class(data) == "data.frame")
+   
+   groups <- levels(data.df[[group.variable]])
+
+   # Check that groups is a vector of size two
+   stopifnot(class(groups) == "character")
+   stopifnot(length(groups) == 2)
+   
+   # Create an empty list which the vectors of the data
+   # are going to be added
+   groups.data <- list()
+   
+   # Divide data samples in to two populations dynamically
+   for (group in groups){
+     group.data <- filter(data.df, data.df[[group.variable]] == group)
+     groups.data[[length(groups.data)+1]] <- group.data
+   }
+
+   # Comparing the Measure of variability between both samples
+   i <- 1
+   for (group.data in groups.data){
+     cat("Mean of group", groups[i], mean(group.data[[variable.to.observe]]), "\n")
+     cat("Variance of group", groups[i], var(group.data[[variable.to.observe]]), "\n")
+     cat("Standard Deviation of group", groups[i], sd(group.data[[variable.to.observe]]), "\n", "\n")
+     i <- i + 1
+   }
+   
+   # Two-sample t-test
+   t.test(data.df[[variable.to.observe]]  ~ data.df[[group.variable]], data = data)
+ }
+```
+
+The following two sample t-test for the reading score:
+
+* Variable to split population: gender
+
+* Hypotheses: 
+    + H0: There is no difference between the average reading score of male and female students
+    + H1: There is a difference between the average reading score of male and female students
+    
+* Significant level: 0.05 (95 percent confidence interval)
+```{r}
+ # TWO SAMPLE T-TEST
+ # VARIABLE: GENDER
+ 
+ # Hypotheses for reading score:
+ # H0: There is no difference between the average reading score of male and female students
+ # H1: There is a difference between the average reading score of male and female students
+ # Significant level 0.05
+compare.populations(data, 'gender', 'reading.score')
+```
+Interpreting the outcome of the t-test, the difference in reading score between females (Mean = 72.6; SD = 14.37) 
+and males (Mean = 65.47; SD = 13.93) was significant (t-value = 7.968) with p < 4.376e-15.
+
+Next, the following two sample t-test for the math score:
+
+The following two sample t-test:
+
+* Variable to split population: gender
+
+* Hypotheses: 
+    + H0: There is no difference between the average math score of male and female students
+    + H1: There is a difference between the average math score of male and female students
+    
+* Significant level: 0.05 (95 percent confidence interval)
+```{r}
+ # TWO SAMPLE T-TEST
+ # VARIABLE: GENDER
+ 
+ # Hypotheses for math score:
+ # H0: There is no difference between the average math score of male and female students
+ # H1: There is a difference between the average math score of male and female students
+ # Significant level 0.05
+compare.populations(data, 'gender', 'math.score')
+```
+Interpreting the outcome of the t-test, the difference in math.score between females (Mean = 63.63; SD = 15.49) and males (Mean = 68.73; SD = 14.36) was significant  (t-value = -5.398; p < 8.421e-08). 
+
+Lastly, since the writing scores are not normally distributed for the female group, the subject's scores were compared by the mean and median.
+```{r}
+# Isolating the writing scores of the two populations
+female.writing.score <- filter(data, data$gender == 'female')[, 'writing.score']
+male.writing.score <- filter(data, data$gender == 'male')[, 'writing.score']
+
+# Constructing data.frames for the median and mean of the two groups
+female_writing_stats <- data.frame(gender=c('female', 'female'), metric=c('median','mean'),
+                                   metric_value=c(median(female.writing.score), mean(female.writing.score)))
+male_writing_stats <- data.frame(gender=c('male', 'male'), metric=c('median','mean'), 
+                                 metric_value=c(median(male.writing.score), mean(male.writing.score)))
+
+# Bind the two data frames by row and keep the columns (function of dplyr)
+writing_stats <- bind_rows(female_writing_stats, male_writing_stats)
+
+# Stacked barplot with multiple groups for the means and medians 
+# Using "position=position_dodge()" in order to have two different bars per group
+ggplot(data=writing_stats, aes(x=metric, fill=gender, y=metric_value)) +
+  geom_bar(stat="identity", position=position_dodge()) + 
+  guides(fill = guide_legend(title = "Gender")) +
+  geom_text(aes(label=round(metric_value, digits = 2)),  color="black", size=5, position=position_dodge(width = .9)) +
+  labs(title="Mean and median writing score per gender", x="metric", y = "score")
+```
+As it was shown, both mean and median writing score of the female group were higher than the male group.
+
+In conclusion, after running the two hypothesis testings, it was proven that it is statistically significant with 95% confidence interval, that generally the females outperformed the males in reading, while the males performed better in maths. Finally, by looking at the distributions, box plots and the summary statistics for the writing score, it seems like the females outperform the males for that subject.
+
+## Analysis of test preparation course
+From the summary of variables, it was already known that the group samples population across the test preparation is unequal(none=642, completed=358). However, this was something that it has taken into account while analyzing the findings on the influence of test preparation on subjects scores.
+
+To see if test preparation affects the subject results, a two-sample Welch's t-test was used to compare the means of the two individual populations (none, completed). The Welch's t-test assumes normality from the distribution for the different scores of the none and completes course populations, hence the non-parametric Kolmogorov-Smirnov test was used to test for normality.
+```{r}
+### VARIABLE: TEST PREPARATION COURSE
+
+# CHECK FOR NORMALITY reading
+std.none_rs<-scale(data$reading.score[data$test.preparation.course=="none"])
+std.completed_rs<-scale(data$reading.score[data$test.preparation.course=='completed'])
+ks.test(std.none_rs,'pnorm')
+ks.test(std.completed_rs,'pnorm')
+# CHECK FOR NORMALITY WRITING
+std.none_ws<-scale(data$writing.score[data$test.preparation.course=="none"])
+std.completed_ws<-scale(data$writing.score[data$test.preparation.course=='completed'])
+ks.test(std.none_ws,'pnorm')
+ks.test(std.completed_ws,'pnorm')
+# CHECK FOR NORMALITY MATH
+std.none_ms<-scale(data$math.score[data$test.preparation.course=="none"])
+std.completed_ms<-scale(data$math.score[data$test.preparation.course=='completed'])
+ks.test(std.none_ms,'pnorm')
+ks.test(std.completed_ms,'pnorm')
+```
+As a result of the non-parametric Kolmogorov-Smirnov test with a 95 percent confidence interval, we may infer that the various scores of none and completed course populations do not violate the  Welch's t-test normality  assumption,  since  all  P-values  are  greater  than  0.05.
+
+We were able to continue with the hypothesis testing and infer if the test preparation did really influence the students' results, since the Welch's t-test took into account that the variance across the two individual populations might not the same.
+
+The following two sample Welch's-test was conducted for the writing score variable between the two different populations (none and completes) test preparation.
+```{r}
+# TWO SAMPLE T-TEST
+#->Variables to Observe: WRITING SCORE - COURSE PREP
+#->Hypotheses:
+#H0: There is no difference between the average writing score on preparation and none preparation course .
+#H1: There is a difference between the average writing score on preparation and none preparation course .
+#->Significant level 0.05
+
+#two-sample t-test
+t.test(writing.score ~ test.preparation.course, data = data)
+## p-value < 0.05 -> accept H1 so, significant difference between average writing score of completed and none completed prep course)
+```
+The result of the hypothesis testing reveal that indeed there is a significant difference between the mean writing score on none and completed test preparation course, since the P-value(2.2e-16) of the test was less than 0.05, the null hypothesis is rejected.
+
+The following two sample Welch's-test was conducted for the reading score variable between the two different populations (none and completes) test preparation.
+```{r}
+# TWO SAMPLE T-TEST
+#->Variables to Observe: READING SCORE - COURSE PREP
+#->Hypotheses:
+#H0: There is no difference between the average reading score on preparation and none preparation course .
+#H1: There is a difference between the average reading score on preparation and none preparation course .
+#->Significant level 0.05
+
+#two-sample t-test
+t.test(reading.score ~ test.preparation.course, data = data)
+## p-value < 0.05 -> accept H1 so, significant difference between average reading score of completed and none completed prep course)
+```
+The following two sample Welch's-test was conducted for the maths score variable between the two different populations (none and completes) test preparation.
+
+The result of the hypothesis testing reveal that indeed there is a significant difference between the mean reading score on none and completed test preparation course, since the P-value(4.389e-15) of the test was less than 0.05, and the null hypothesis was rejected.
+```{r}
+# TWO SAMPLE T-TEST
+#->Variables to Observe: MATH SCORE - COURSE PREP
+#->Hypotheses:
+#H0: There is no difference between the average math score on preparation and none preparation course .
+#H1: There is a difference between the average math score on preparation and none preparation course .
+#->Significant level 0.05
+
+#two-sample t-test
+t.test(math.score ~ test.preparation.course, data = data)
+## p-value < 0.05 -> accept H1 so, significant difference between average math score of completed and none completed prep course)
+```
+The result of the hypothesis testing reveal that indeed there is a significant difference between the mean math score on none and completed test preparation course, since the P-value(1.043e-08) of the test was less than 0.05, the null hypothesis was rejected.
+
+To conclude, students who had completed a course preparation test appear to score better in all subjects than those who did not have any preparation test.
+
+## Analysis of lunch 
+From the summary of variables, it was already known that the group samples population across the lunch was unequal (free/reduced=355, standard=645). However, this was something which had been taken into account while analysing our findings on the influence of lunch on subjects scores.
+
+To obsrve if lunch affects the subject results, a two-sample Welch's t-test was used to compare the means of the two individual populations (free/reduced, standard). The Welch's t-test assumes normality from the distribution for the different scores of the none and completes course populations, hence the non-parametric Kolmogorov-Smirnov test was used to test for normality.
+```{r}
+### VARIABLE:LUNCH
+
+#CHECK FOR NORMALITY reading
+std.freereduced_rs<-scale(data$reading.score[data$lunch=="free/reduced"])
+std.standard_rs<-scale(data$reading.score[data$lunch=='standard'])
+ks.test(std.freereduced_rs,'pnorm')
+ks.test(std.standard_rs,'pnorm')
+
+#CHECK FOR NORMALITY WRITING
+std.freereduced_ws<-scale(data$writing.score[data$lunch=="free/reduced"])
+std.standard_ws<-scale(data$writing.score[data$lunch=='standard'])
+ks.test(std.freereduced_ws,'pnorm')
+ks.test(std.standard_ws,'pnorm')
+
+#CHECK FOR NORMALITY MATH
+std.freereduced_ms<-scale(data$math.score[data$lunch=="free/reduced"])
+std.standard_ms<-scale(data$math.score[data$lunch=='standard'])
+ks.test(std.freereduced_ms,'pnorm')
+ks.test(std.standard_ms,'pnorm')
+```
+As a result of the non-parametric Kolmogorov-Smirnov test with a 95 percent confidence interval, we may infer that the various scores of free/reduce and standard populations do not violate the  Welch's t-test normality assumption,  since  all  P-values  are  greater  than  0.05.
+
+We were able to continue with the hypothesis testing and infer if the lunch did really influence the students' results, since the Welch's t-test took into account that the variance across the two individual populations might not the same.
+
+The following two sample Welch's-test was conducted for the different score variables between the two different populations (free/reduce and standard) lunch.
+```{r}
+# TWO SAMPLE T-TEST
+#->Variables to Observe: WRITING SCORE/READING/MATH- LUNCH
+#->Hypotheses:
+#H0: There is no difference between the average writing score on standard and free lunch .
+#H1: There is a difference between the average writing score on standard and free lunch .
+#->Significant level 0.05
+
+#two-sample t-test
+t.test(writing.score ~ lunch, data = data)
+## p-value < 0.05 -> accept H1 so, significant difference between averages of standard and free/reduced lunch)
+
+#two-sample t-test
+t.test(reading.score ~ lunch, data = data)
+## p-value < 0.05 -> accept H1 so, significant difference between averages of standard and free/reduced lunch)
+
+#two-sample t-test
+t.test(math.score ~ lunch, data = data)
+## p-value < 0.05 -> accept H1 so, significant difference between averages of standard and free/reduced lunch)
+```
+
+Regarding the reading score, the result of the hypothesis testing reveal that indeed lunch has a significant difference in mean reading score between free/reduce and standard population, since the P-value(8.422e-13) of the test was less than 0.05, and the null hypothesis was rejected.
+
+For the writing score, the result of the hypothesis testing reveal that indeed lunch has a significant difference in mean writing score between free/reduce and standard population, since the P-value(1.716e-14) of the test was less than 0.05, the null hypothesis has been rejected.
+
+Finally, for the math score, the result of the hypothesis testing revealed that indeed there is a significant difference between the mean writing score on free/reduce and standard, since the P-value(2.2e-16) of the test was less than 0.05 and the null hypothesis was rejected.
+
+
+## Comparisons between the different ethnicities
+From the initial summary of variables, it was already known that the group samples population across the race ethnicity is unequal. However, this was something we took into account while analysing the different findings on the influence of racial ethnicity on subject score.
+
+Boxplots for the scores based on the different race/ethnicity
+```{r}
+# boxplot for math.score
+# Using "position=position_dodge()" in order to have a different boxplot per group
+boxplot.gender.math.score <- ggplot(data=data, aes(x=math.score, y=race.ethnicity, fill=race.ethnicity)) +
+  geom_boxplot() + coord_flip() +
+  labs(title="Box plot for Math Scores",x="Math Scores", y = "Ethinicity")
+
+# boxplot for reading.score
+# Using "position=position_dodge()" in order to have a different boxplot per group
+boxplot.gender.reading.score<- ggplot(data=data, aes(x=reading.score, y=race.ethnicity, fill=race.ethnicity)) +
+  geom_boxplot() + coord_flip() +
+  labs(title="Box plot for Reading Scores",x="Reading Scores", y = "Ethinicity")
+
+# boxplot for writing.score
+# Using "position=position_dodge()" in order to have a different boxplot per group
+boxplot.gender.writing.score <- ggplot(data=data, aes(x=writing.score, y=race.ethnicity, fill=race.ethnicity)) +
+  geom_boxplot() + coord_flip() +
+  labs(title="Box plot for Writing Scores",x="Writing Scores", y = "Ethinicity")
+# The three defined plots are going to be plotted on this page
+ggarrange(boxplot.gender.math.score, boxplot.gender.reading.score, boxplot.gender.writing.score,
+          ncol = 3, nrow = 1)
+```
+It discovered that for all the topics, race ethnicity under group E had the highest performance, although group A did not do as well as the other ethnicities. One thing to keep in mind is that the order of greater performance in all subjects is almost the same. However, in order to compare the means of each race ethnicity population and be more exact about our conclusions, it was chosen to cross-check these results using an ANOVA test (analysis of variance).
+
+During the analysis, it was determined if race/ethnicity had an impact on subject scores or not by using an ANOVA test. However, ANOVA assumes normality in the data \ref{lantz2013impact}, so it was investigated how the different ethnicity groups' populations are distributed in order to establish the tests and conclude if ethnicity has an influence on subject scores.
+
+To assess the normality of the distribution for the different scores of each race ethnicity population, the non-parametric Kolmogorov-Smirnov test was used.
+```{r}
+### VARIABLE: RACE ETHNICITY
+
+#CHECK FOR NORMALITY READIND SCORE
+std.groupA_rs<-scale(data$reading.score[data$race.ethnicity=='group A'])
+std.groupB_rs<-scale(data$reading.score[data$race.ethnicity=='group B'])
+std.groupC_rs<-scale(data$reading.score[data$race.ethnicity=='group C'])
+std.groupD_rs<-scale(data$reading.score[data$race.ethnicity=='group D'])
+std.groupE_rs<-scale(data$reading.score[data$race.ethnicity=='group E'])
+ks.test(std.groupA_rs,'pnorm')
+ks.test(std.groupB_rs,'pnorm')
+ks.test(std.groupC_rs,'pnorm')
+ks.test(std.groupD_rs,'pnorm')
+ks.test(std.groupE_rs,'pnorm')
+
+# CHECK FOR NORMALITY FOR WRITING SCORE
+std.groupA_ws<-scale(data$writing.score[data$race.ethnicity=='group A'])
+std.groupB_ws<-scale(data$writing.score[data$race.ethnicity=='group B'])
+std.groupC_ws<-scale(data$writing.score[data$race.ethnicity=='group C'])
+std.groupD_ws<-scale(data$writing.score[data$race.ethnicity=='group D'])
+std.groupE_ws<-scale(data$writing.score[data$race.ethnicity=='group E'])
+ks.test(std.groupA_ws,'pnorm')
+ks.test(std.groupB_ws,'pnorm')
+ks.test(std.groupC_ws,'pnorm')
+ks.test(std.groupD_ws,'pnorm')
+ks.test(std.groupE_ws,'pnorm')
+
+# CHECK FOR NORMALITY FOR MATH SCORE
+std.groupA_ms<-scale(data$math.score[data$race.ethnicity=='group A'])
+std.groupB_ms<-scale(data$math.score[data$race.ethnicity=='group B'])
+std.groupC_ms<-scale(data$math.score[data$race.ethnicity=='group C'])
+std.groupD_ms<-scale(data$math.score[data$race.ethnicity=='group D'])
+std.groupE_ms<-scale(data$math.score[data$race.ethnicity=='group E'])
+ks.test(std.groupA_ms,'pnorm')
+ks.test(std.groupB_ms,'pnorm')
+ks.test(std.groupC_ms,'pnorm')
+ks.test(std.groupD_ms,'pnorm')
+ks.test(std.groupE_ms,'pnorm')
+```
+As a result of the non-parametric Kolmogorov-Smirnov test with a 95% confidence interval, we may infer that the various scores of each race ethnicity population do not violate the ANOVA test's normality assumption, since all P-values are greater than 0.05.However, we were hesitant to employ the ANOVA test since the test's accuracy may be influenced by the different sample group sizes.
+
+As a response, we end up employing the one-way Welch's ANOVA test, which accounts for the inequality and homogeneity of variances across our sample sizes.
+
+Race/ethnicity influence for the different scores
+```{r}
+#perform Welch's ANOVA    
+oneway.test(data$reading.score ~ data$race.ethnicity, data = data, var.equal = FALSE) #notice that we check with 
+#var.equal= false 
+
+#Tukey-Kramer test
+TukeyHSD(aov(data$reading.score ~ data$race.ethnicity))
+
+#perform Welch's ANOVA    
+oneway.test(data$writing.score ~ data$race.ethnicity, data = data, var.equal = FALSE) #notice that we check with 
+#var.equal= false 
+
+#Tukey-Kramer test
+TukeyHSD(aov(data$writing.score ~ data$race.ethnicity))
+
+#perform Welch's ANOVA    
+oneway.test(data$math.score ~ data$race.ethnicity, data = data, var.equal = FALSE) #notice that we check with 
+#var.equal= false 
+
+#Tukey-Kramer test
+TukeyHSD(aov(data$math.score ~ data$race.ethnicity))
+```
+To summarize, students from groups D and E outperform students from group A in reading scores, while students from group E appear to outperform group B as well. In terms of writing scores, it was found that students from ethnicities C, D, and E had higher writing scores than students from group A. Students from ethnicity D and E appear to outperform even those from group B. Finally, in respect of math scores, we may infer that group E outperformed groups C, D, B, and A, whereas students from race D outperformed those from groups B and A.
+
+## Comparisons between the different levels of education
+Boxplots for the scores based on the different parental level of education
+```{r}
+# boxplot for writing.score
+# Using "position=position_dodge()" in order to have a different boxplot per group
+boxplot.gender.writing.score <- ggplot(data=data, aes(x=writing.score, y=parental.level.of.education, fill=parental.level.of.education)) +
+  geom_boxplot() + coord_flip() +   theme(axis.text.x=element_blank()) +
+  labs(title="Box plot for Writing Scores",x="Writing Scores", y = "parental education")
+
+# boxplot for math.score
+# Using "position=position_dodge()" in order to have a different boxplot per group
+boxplot.gender.math.score <- ggplot(data=data, aes(x=math.score, y=parental.level.of.education, fill=parental.level.of.education)) +
+  geom_boxplot() + coord_flip() +   theme(axis.text.x=element_blank()) +
+  labs(title="Box plot for Math Scores",x="Math Scores", y = "parental education")
+
+# boxplot for reading.score
+# Using "position=position_dodge()" in order to have a different boxplot per group
+boxplot.gender.reading.score<- ggplot(data=data, aes(x=reading.score, y=parental.level.of.education, fill=parental.level.of.education)) +
+  geom_boxplot() + coord_flip() +   theme(axis.text.x=element_blank()) +
+  labs(title="Box plot for Reading Scores", x="Reading Scores", y = "parental education")
+
+# The three defined plots are going to be plotted on this page
+ggarrange(boxplot.gender.writing.score,  boxplot.gender.math.score, boxplot.gender.reading.score,
+          ncol = 3, nrow = 1)
+```
+In all the themes, it was found that students whose parents had a master's degree had the highest achievements. Furthermore, individuals whose parents had only completed a high school education or had only completed a high school education did not fare as well as individuals whose parents had a different academic background. One point to note is that the sequence of the results is the same in all courses. Finally, it seems like the medians for individuals whose parents did not fully complete high school, were greater than those students whose parents completed high school. This is somehow strange, and it will examined furthered more.
+
+In order to compare the means of each race ethnicity population and be more exact about our conclusions, we choose to cross-check these data by using a Welch's ANOVA test (analysis of variance, assuming no equal variances across our sample sizes).
+
+
+Using Welch's ANOVA test, it was assessed whether parental level of education had an influence on subject results during the analysis. However, because the test presupposes that the data is normal, it was explored how the populations of the various parental education groups are distributed in order to create Welch's ANOVA test and determine if parental education background has an impact on subject results of students. 
+
+The non-parametric Kolmogorov-Smirnov test was firstly performed to analyse the normality of the distribution for the different scores of each parental level of education population.
+```{r}
+### VARIABLE: PARENTAL LEVEL OF EDUCATION
+
+#CHECK FOR NORMALITY reading SCORE
+std.BA_rs<-scale(data$reading.score[data$parental.level.of.education=="bachelor's degree"])
+std.SC_rs<-scale(data$reading.score[data$parental.level.of.education=='some college'])
+std.MD_rs<-scale(data$reading.score[data$parental.level.of.education=="master's degree"])
+std.AD_rs<-scale(data$reading.score[data$parental.level.of.education=="associate's degree"])
+std.HS_rs<-scale(data$reading.score[data$parental.level.of.education=='high school'])
+std.SHS_rs<-scale(data$reading.score[data$parental.level.of.education=='some high school'])
+ks.test(std.BA_rs,'pnorm')
+ks.test(std.SC_rs,'pnorm')
+ks.test(std.MD_rs,'pnorm')
+ks.test(std.AD_rs,'pnorm')
+ks.test(std.HS_rs,'pnorm')
+ks.test(std.SHS_rs,'pnorm')
+
+#CHECK FOR NORMALITY WRITING
+std.BA_ws<-scale(data$writing.score[data$parental.level.of.education=="bachelor's degree"])
+std.SC_ws<-scale(data$writing.score[data$parental.level.of.education=='some college'])
+std.MD_ws<-scale(data$writing.score[data$parental.level.of.education=="master's degree"])
+std.AD_ws<-scale(data$writing.score[data$parental.level.of.education=="associate's degree"])
+std.HS_ws<-scale(data$writing.score[data$parental.level.of.education=='high school'])
+std.SHS_ws<-scale(data$writing.score[data$parental.level.of.education=='some high school'])
+ks.test(std.BA_ws,'pnorm')
+ks.test(std.SC_ws,'pnorm')
+ks.test(std.MD_ws,'pnorm')
+ks.test(std.AD_ws,'pnorm')
+ks.test(std.HS_ws,'pnorm')
+ks.test(std.SHS_ws,'pnorm')
+
+#CHECK FOR NORMALITY MATH
+std.BA_ms<-scale(data$math.score[data$parental.level.of.education=="bachelor's degree"])
+std.SC_ms<-scale(data$math.score[data$parental.level.of.education=='some college'])
+std.MD_ms<-scale(data$math.score[data$parental.level.of.education=="master's degree"])
+std.AD_ms<-scale(data$math.score[data$parental.level.of.education=="associate's degree"])
+std.HS_ms<-scale(data$math.score[data$parental.level.of.education=='high school'])
+std.SHS_ms<-scale(data$math.score[data$parental.level.of.education=='some high school'])
+ks.test(std.BA_ms,'pnorm')
+ks.test(std.SC_ms,'pnorm')
+ks.test(std.MD_ms,'pnorm')
+ks.test(std.AD_ms,'pnorm')
+ks.test(std.HS_ms,'pnorm')
+ks.test(std.SHS_ms,'pnorm')
+```
+It was deduced, that the varied scores of each parental level of education population do not violate the ANOVA test's normality assumption since all P-values are larger than 0.05 as a result of the non-parametric Kolmogorov-Smirnov test with a 95 percent confidence interval. However, it was concerned to use the ANOVA test since the accuracy of the test may be altered by sample group sizes.
+
+As a result, the one-way Welch's ANOVA test was used, which consider the population inequality and variance homogeneity across sample sizes.
+```{r}
+## ANALYSIS OF VARIANCE (ANOVA)
+#->Hypotheses: Affection of parental level of education on total score
+#H0: There is no statistical difference in the total score mean between each parental level of education.
+#H1: There is a statistical difference in the total score mean between each parental level of education.
+
+#perform Welch's ANOVA    
+oneway.test(data$reading.score ~ data$parental.level.of.education, data = data, var.equal = FALSE) #notice that we check with 
+#var.equal= false 
+
+#Tukey-Kramer test
+TukeyHSD(aov(data$reading.score ~ data$parental.level.of.education))
+
+#perform Welch's ANOVA    
+oneway.test(data$writing.score ~ data$parental.level.of.education, data = data, var.equal = FALSE) #notice that we check with 
+#var.equal= false 
+
+#Tukey-Kramer test
+TukeyHSD(aov(data$writing.score ~ data$parental.level.of.education))
+
+#perform Welch's ANOVA    
+oneway.test(data$math.score ~ data$parental.level.of.education, data = data, var.equal = FALSE) #notice that we check with 
+#var.equal= false 
+
+#Tukey-Kramer test
+TukeyHSD(aov(data$math.score ~ data$parental.level.of.education))
+```
+To summarize, students for whom the parents have a some college diploma, an associate degree, a bachelor's degree, or a master's degree outperform students whose parents only have a high school diploma in reading scores, while students whose parents have a bachelor's degree and a master's degree appear to outperform students whose parents only have a some high school education. In terms of writing scores, we found that students whose their parents had some college diploma, an associate degree or bachelor's degree, or a master's degree achieved higher writing scores than students whose their parents had only high school background. Additionally, students whose their parents had an education from the associate degree and beyond, appear to outperform even those whose their parents had partially completed high school. Finally, we may deduce that the parental level of education corresponds with math scores has the same manner as it does with writing scores.
+
+# Final Analysis
+
+In the direction of feeding the data into different regression models-algorithms, a specific pre-processing procedure should have been followed. In order to feed the data to a regression model, the categorical-factor variables-columns were transformed to one-hot (dummy) variables or numerical variables.
+
+Accurately, during the pre-processing steps, the factor-categorical variables gender, race.ethnicity and lunch were transformed to dummy variables. The reason for that, is due to the fact that for categorical variables where no such ordinal relationship exists, the numerical encoding is not enough. Using the numerical encoding and allowing a model to assume a natural ordering between categories may result in poor performance or unexpected results . For that case, a one-hot encoding was applied to the ordinal representation. This is where the factor encoded variables were removed, and one new binary variable was added for each unique value of the variables. In addition, since linear models were also employed, only the $n-1$ out of the $n$ new binary variables were kept for each one of the initial categorical variables. To make it clear, for each initial variable, one of its $n$ binary variables was kept out in to avoid the “dummy variable trap”; a scenario in linear models where the independent variables are multicollinear (highly correlated), since one variable is statistically/informationally redundant, and contains no additional information. The removed argument can be set to indicate which category will become the one that is assigned all zero values, called the “baseline“, since it is used as the reference group.
+
+A summary of the encoded variables is presented below.
+```{r}
+# In order to feed the data to a regression model, the categorical-factor variables-columns should be transformed to one-hot variables or numerical variables
+
+# For the parental education, as it was previously mentioned, the factors were sorted from low to high education. Therefore the column can easily be transformed to numerical
+# Converting a factor into a numeric vector 
+data$parental.level.of.education <- as.numeric(data$parental.level.of.education)
+
+# Applying one-hot encoding for the rest of the categorical variables
+# For the categorical-factor variables, the n-1 of the n constructed one-hot columns are kept,
+# since the most frequent dummy variable is removed in order to avoid multicollinearity problems (when independent variables in the regression model are highly correlated to each other)
+# The one.hot.data dataframe will have 11 total variables after the encoding, since the library fastDummies creates four dummy variables from the categorical variable race.ethnicity by removing the most frequent dummy, which was the group C.
+one.hot.data <- fastDummies::dummy_cols(data, remove_selected_columns=TRUE, remove_most_frequent_dummy=TRUE)
+
+# Structure of the new dataframe
+str(one.hot.data)
+```
+In our case, the binary variable of the most frequent category-group for a specific variable was kept out as the reference group. For example regarding the race.ethnicity variable, group C was omitted from the transformed data.frame, since as elucidated that group C was the most frequent among the ethnicities. The same procedure has been performed for each categorical variable in the data, in order to eliminate the perfect multicollinearity between the explanatory variables. In the special case of the parental.level.of.education variable, even though the variable was initially a categorical variable, it was reasonable for its different levels-values to follow a specific order, thus the specific variable was not encoded with one-hot representation. Instead, it was numerical encoded according to its sorted values, as it was explained before.
+
+
+Following, a plot of the correlation of every pair of variables in the dataset has been constructed. 
+```{r}
+# Use of the command cor() to find the correlation of every pair of variables in the data
+cor_matrix <- cor(one.hot.data, use='everything')
+
+# Using the corrplot() command which shows graphically the correlation between the variables 
+par(mfrow=c(1,1))
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(cor_matrix, method="color", col=col(200), number.cex = 0.9, order="hclust",  addCoef.col = "black",  tl.col="black", tl.srt=45, diag=FALSE) 
+```
+Following, a plot of the correlation of every pair of variables in the dataset has been constructed. The correlation plot provided useful information for the variables. Indeed, as shown in the correlation plot, the three scores are strongly correlated, which shows that in general, students that perform good in the exams for a particular subject, tend to perform good in the rest of the subjects as well. Especially for the writing and reading scores, where their linear relationship is highly correlated (95% correlation). Moreover, it can be seen that the variables gender.male, parental level of education and test preparation course reported significantly more than the variables groupA and groupB.
+
+Regarding the high correlation between the score variables, multi-collinearity (high correlation) usually leads to wrong conclusions in a linear regression model, because the distinction between the individual effects of the independent variables on the dependent variable is not possible. Therefore, that was taken into consideration during the next steps of the work.
+
+## Linear models
+
+Next, the the linear models which will predict students' performance in Maths, Reading and Writing were created. The representation is a linear equation that combines a specific set of independent (explanatory) variables the solution to which is the predicted output for that set of input values.
+
+Before initializing the models, the data was scaled (standardized to have zero mean and standard deviation of one) in order to compare the coefficients after the model has been constructed.
+```{r}
+# Scaling data using z-score standardization
+scaled.one.hot.data <- as.data.frame(scale(one.hot.data))
+```
+
+Firstly, the linear model is created for the math scores.
+```{r}
+# Linear model for Maths' score
+linear_model <- lm(math.score~., data=scaled.one.hot.data)
+
+# The Variance Inflation Factor (VIF) measures the severity of multicollinearity in regression analysis. Mathematically, the VIF for a regression model variable is equal to the ratio of the overall model variance to the variance of a model that includes only that single independent variable. Generally, if the values of vif are higher than 5, it indicates high correlation. 
+vif(linear_model)
+
+# From the results (vif>10) it was concluded that there is linear correlation between the variables reading and writing score with other independent variables or with each other. 
+
+# Although only one of these strongly correlated predictors could have been removed from the model in order to avoid multi-collinearity, it was chosen to drop both scores. The same steps have been followed for the construction of all the following linear models. The reason that it was chosen to drop both scores for each linear model is that it was assumed that the evaluation of the students' performance in each subject was done in a specific period of time (e.g. same exam period or semester). So, in our way of thinking it was chosen not to take as granted that the evaluations for the other two tests have been done, for each linear model, because some of the predictions will be taken as given data.
+
+# Linear model for Maths' score (without any other scoring variable included)
+linear_model <- lm(math.score~. -reading.score-writing.score, data = scaled.one.hot.data)
+
+# Now it was obvious that the results of vif for each variable do not exceed the level of acceptance.
+vif(linear_model) 
+
+linear_model
+
+summary(linear_model)
+
+# Although from the summary table we can see that groups A and B are not statistically significant variables for the linear model linear_model in level of significance a=0.05, we cannot conclude that groups A and B do not provide many information. These assumptions may be caused due to multi-collinearity between some variables. 
+```
+
+
+A barplot with the sorted (by absolute values) coefficients of the math scores model was plotted.
+
+Since the procedure of coefficient plot was followed for all the score variables, a relative function was implemented in order to avoid code repetition and increase readability.
+```{r}
+# The function plots the coefficients of the given linear_model in a sorted (by asbolute value) way  
+barplot_for_model_coeffs <- function(linear_model, plot_title="Barplot of the Coefficients in Linear Model"){
+  # Check conditions for the input of the data
+  stopifnot(class(linear_model) == "lm")
+  stopifnot(class(plot_title) == "character")
+
+  # Barplot of the coefficients of linear_model
+  model_coefs <- as.data.frame(linear_model$coefficients) # Extracting the information of the model
+  variables <- row.names(model_coefs) # Get the variable names
+  coeffs <- model_coefs[,1] # Get the coeff values
+  model_coefs <- data.frame(variables, coeffs) # Put to a new dataframe
+  
+  # Plotting only the actual variables and not the Intercept, sorted by their absolute value
+  ggplot(model_coefs[-(1:1), ], aes(reorder(variables, abs(coeffs)), coeffs)) +
+    geom_bar(stat = "identity")+
+    geom_text(aes(label=round(coeffs, 3)), size=5.5) +  theme(axis.text.y = element_text(size = 11)) +
+    ggtitle(plot_title) +
+    coord_flip()
+}
+
+# Calling the function to plot and present the sorted coeffs of the model
+barplot_for_model_coeffs(linear_model, plot_title="Barplot of the Coefficients in Linear Model for Maths")
+```
+
+Succeeding, the residuals of the regression should necessarily be normally distributed, to make valid inferences from the regressions. Therefore, a QQ-plot was constructed and the results were also tested with a non-parametric Kolmogorov-Smirnov test, in order to check for normality and confirm the normality assumption of the residuals of the linear model. On top, a test of linearity of the residuals had been performed.
+
+For the above operations, a relative function was implemented to use it multiple times for the other scores as well.
+```{r}
+# The function checks for the normality of the residuals for the given linear_model,
+# plots a QQ Normal Plot and runs a non-parametric Kolmogorov-Smirnov test for normality hypothesis testing,
+# and plots the fitted values vs the resiaduls of the model, to check for linearity
+check_normality_of_residuals <- function(linear_model, qq_plot_title= 'Residuals of Linear Model', 
+                                         hist_plot_title='Histogram of the Residuals of the Linear Model'){
+  # Check conditions for the input of the data
+  stopifnot(class(linear_model) == "lm")
+  stopifnot(class(qq_plot_title) == "character")
+  stopifnot(class(hist_plot_title) == "character")
+  
+  # In order to plot two graphs on the same figure
+  par(mfrow=c(1,3))
+  
+  # The scaled residuals of the linear model
+  residuals <- scale(linear_model$residuals)
+  
+  # QQ-plot with Normal
+  qqnorm(residuals, main=qq_plot_title, col='deepskyblue4', 
+         xlab='Predicted values', ylab='Actual Values')
+  qqline(residuals, col='red')
+  
+  # Histogram of the residuals
+  hist(residuals, main=hist_plot_title)
+  
+  # Check for linearity of the residuals for model 
+  # The desired behavior is for the residuals to do not follow a specific pattern
+  plot(fitted(linear_model), residuals, main='Residual vs Fitted for Model', 
+       xlab='Fitted Values', ylab='Residuals')
+  axis(side=1, at=seq(0, 100, by=10))
+  
+  # Confirmation of the results with a non-parametric test:Kolmogorov-Smirnov 
+  ks.test(residuals, 'pnorm') 
+}
+
+# Calling the function for a QQ Normal Plot and for a non-parametric Kolmogorov-Smirnov test for normality hypothesis testing
+check_normality_of_residuals(linear_model, qq_plot_title= 'Residuals of Linear Model for Maths', 
+                                         hist_plot_title='Histogram of the Residuals of the Linear Model for Maths')
+```
+Since the p-value is greater than the significance level a=0.05, the null hypothesis is not rejected, which means that the residuals occurred from the Normal curve. Also there is no pattern in the residual plot. This suggests that a linear relationship between the predictors and the outcome variable can be assumed.
+
+The same steps have been done for the reading, writing score
+
+Linear model for Reading score
+```{r}
+# Linear model for Reading score (without any other scoring variables included)
+linear_model <- lm(reading.score~. -math.score -writing.score, data = scaled.one.hot.data)
+vif(linear_model) 
+linear_model
+summary(linear_model)
+```
+
+Barplot of the coefficients of the model for the reading scores
+```{r}
+# Calling the function to plot and present the sorted coeffs of the model
+barplot_for_model_coeffs(linear_model, plot_title="Barplot of the Coefficients in Linear Model for Reading")
+```
+
+Normality checking for the residuals of the model for reading scores
+```{r}
+# Calling the function for a QQ Normal Plot and for a non-parametric Kolmogorov-Smirnov test for normality hypothesis testing
+check_normality_of_residuals(linear_model, qq_plot_title= 'Residuals of Linear Model for Reading', 
+                                         hist_plot_title='Histogram of the Residuals of the Linear Model for Reading')
+```    
+Since the p-value is greater than the significance level a=0.05, the null hypothesis is not rejected, which means that the residuals occurred from the Normal curve. Also there is no pattern in the residual plot. This suggests that a linear relationship between the predictors and the outcome variable can be assumed.
+
+ 
+Linear model for Writing score
+```{r}
+# Linear model for Writing score (without any other scoring variables included)
+linear_model <- lm(writing.score~. -math.score -reading.score, data = scaled.one.hot.data)
+vif(linear_model) 
+linear_model
+summary(linear_model)
+```
+
+Barplot of the coefficients of the model for the writing scores
+```{r}
+# Calling the function to plot and present the sorted coeffs of the model
+barplot_for_model_coeffs(linear_model, plot_title="Barplot of the Coefficients in Linear Model for Writing")
+```
+
+Normality checking for the residuals of the model for writing scores
+```{r}
+# Calling the function for a QQ Normal Plot and for a non-parametric Kolmogorov-Smirnov test for normality hypothesis testing
+check_normality_of_residuals(linear_model, qq_plot_title= 'Residuals of Linear Model for Writing', 
+                                         hist_plot_title='Histogram of the Residuals of the Linear Model for Writing')
+```    
+Since the p-value is greater than the significance level a=0.05, the null hypothesis is not rejected, which means that the residuals occurred from the Normal curve. Also there is no pattern in the residual plot. This suggests that a linear relationship between the predictors and the outcome variable can be assumed.
+
+## Other models
+
+Data Partitioning: The train set will contain the 80% of the data, while the test set will have the remaining 20%. The models are going to be built on the training set, and to evaluate its performance and prediction power, the test set is going to be predicted. 
+```{r}
+# The glmnet library does not support dataframes as input, thus the prediction phase will utilize matrixes as data
+one.hot.data <- as.matrix(one.hot.data[])
+
+# Choosing an index for randomly sampling observations for the data partitioning
+# Note that a specific seed was set at the start of the work, to ensure reproductibility of the results
+index <- sample(1:nrow(one.hot.data), 0.8*nrow(one.hot.data)) 
+
+train.data <- one.hot.data[index,] # Create the training data, will have 80% of the data (800/1000)
+test.data <- one.hot.data[-index,] # Create the test data, will have 20% of the data (200/1000)
+```
+
+Isolate the predictors and target variables. Note that non of the scoring variables are not included in the predictors data.
+```{r}
+X_train <- train.data[, !colnames(train.data) %in% c("math.score", "reading.score", "writing.score")]
+y_train <- train.data[, colnames(train.data) %in% c("math.score", "reading.score", "writing.score")]
+X_test <- test.data[, !colnames(test.data) %in% c("math.score", "reading.score", "writing.score")]
+y_test <- test.data[, colnames(test.data) %in% c("math.score", "reading.score", "writing.score")]
+```
+
+In order for the regression algorithm to run smoothly, the data is first scaled-standardized
+```{r}
+# Using the caret package in order to standardize the test data as well,
+# but with using only the mean and std of the train data. That way, we avoid cheating, by not allowing information
+# of the test data to be used during the preprocssesing. Scaling then splitting or scaling each sample with its own parameters for example, is wrong because it makes use of information extracted from the test sample to build the model afterwards.
+#library(caret)
+
+# Compute scaling parameters solely on the training samples
+X_scale_params <- preProcess(X_train, method = c("center", "scale"))
+y_scale_params <- preProcess(y_train, method = c("center", "scale"))
+
+# Standardize both train and test samples with the mean and std of the training portion
+X_train <- predict(X_scale_params, X_train)
+X_test <- predict(X_scale_params, X_test)
+y_train <- predict(y_scale_params, y_train)
+y_test <- predict(y_scale_params, y_test)
+``` 
+### Lasso regression
+For the different Linear Models, the glmnet library utilized, which provides efficient procedures for fitting Linear Regression models
+
+In order to get the important features from the coefficients after the model is trained, we will use the lasso regression model.
+
+Lasso regression, or the L1-Regression, is a modification of the linear regression. In lasso, the loss function is modified to minimize the complexity of the model by limiting the sum of the absolute values of the model coefficients (also called the l1-norm).
+The model has a penalty hyper-parameter 'lambda' that is needed to be selected. Using an l1-norm constraint forces some weight values to zero to allow other coefficients to take non-zero values. The 'lambda' hyper-parameter is the constant that multiplies the l1 term.
+
+Implementing the function for evaluation and for the model pipeline for Lasso regression
+```{r}
+# The evaluation function, which computes R^2, MSE and RMSE from true and predicted values
+eval_results <- function(true, predicted) {
+  SSE <- sum((predicted - true)^2)
+  SST <- sum((true - mean(true))^2)
+  R_square <- 1 - SSE / SST
+  RMSE = sqrt(SSE/length(true))
+  MSE = (sum(abs(predicted - true))/length(true))
+  
+  # Return model performance metrics
+  data.frame(MSE = MSE, RMSE = RMSE, Rsquare = R_square)
+}
+
+# Function that rescales a single variable data based on the 
+# given mean and std of the given variable name of the given preProc object
+unPreProc <- function(preProc, data, var_name){
+  # Check conditions for the input of the data
+  stopifnot(class(var_name) == "character")
+  stopifnot(class(preProc) == "preProcess")
+  #stopifnot((class(data) == "numeric") | (class(data) == "matrix"))
+  # Rescale the data by multiplying with the std and adding the mean
+  return ((data * preProc$std[[var_name]] + preProc$mean[[var_name]]))
+}
+
+# Lasso regression, or the L1-Regression, is a modification of the linear regression. In lasso, the loss function is modified to minimize the complexity of the model by limiting the sum of the absolute values of the model coefficients (also called the l1-norm).
+# The model has a penalty hyper-parameter 'lambda' that is needed to be selected. Using an l1-norm constraint forces some weight values to zero to allow other coefficients to take non-zero values. The 'lambda' hyper-parameter is the constant that multiplies the l1 term.
+
+# The function is used as a pipeline in order to predict a specific given target variable 
+run_lasso_reg <- function(X_train, y_train, X_test, y_test, cv_folds = 25, target_variable, y_scale_params){
+  # Firt the optimal hyperparameters will be chosen for the speicific model
+  # Run the glmnet() model several times for different values of lambda.
+  # The task of finding the optimal lambda value is automated using the cv.glmnet() function, which peforms a 25-fold cross validation
+  # to select the optimal hyper-parameter from the given list
+  lambdas <- 10^seq(2, -3, by = -.1)
+  # Setting alpha to 1 implements lasso regression
+  lasso_reg <- cv.glmnet(x = X_train,  y = y_train, alpha = 1, lambda = lambdas, nfolds = cv_folds)
+  #plot(lasso_reg)
+  
+  # Best model's lambda
+  optimal_lambda <- lasso_reg$lambda.min 
+  optimal_lambda
+  
+  # Running the ideal model for all the training data in order to predict the test set
+  lasso_model <- glmnet(x = X_train, y = y_train, alpha = 1, lambda = optimal_lambda)
+  
+  # Prediction and evaluation on train data (using original-uscaled target variables)
+  cat("\nEvaluation metrics for the training data: \n")
+  predictions_train <- predict(lasso_model, s = optimal_lambda, newx = X_train)
+  print(eval_results(unPreProc(y_scale_params, y_train, target_variable), 
+                     unPreProc(y_scale_params, predictions_train, target_variable)))
+  # Prediction and evaluation on test data (using original-uscaled target variables)
+  cat("\nEvaluation metrics for the test data: \n")
+  predictions_test <- predict(lasso_model, s = optimal_lambda, newx = X_test)
+  print(eval_results(unPreProc(y_scale_params, y_test, target_variable),
+                     unPreProc(y_scale_params, predictions_test, target_variable)))
+  
+  # Extracting the coefficients of the model
+  tmp_coeffs <- coef(lasso_model)
+  coeffs_df <- data.frame(name = tmp_coeffs@Dimnames[[1]][tmp_coeffs@i + 1], coefficient = tmp_coeffs@x)
+  # Prints the coefficients sorted in a decreasing order, by their absolute value 
+  cat("\nThe coefficients of the model: \n")
+  coeffs_to_show <- coeffs_df[sort(abs(coeffs_df$coefficient), decreasing = T, index.return = T)[[2]],]
+  print(coeffs_to_show)
+  
+  # Plotting only the actual variables and not the Intercept, sorted by their absolute value
+  ggplot(head(coeffs_to_show,-1), aes(reorder(name, abs(coefficient)), coefficient)) +
+    geom_bar(stat = "identity")+
+    geom_text(aes(label=round(coefficient,3)), vjust=-0.2, size=3.5) + 
+    ggtitle("Barplot of Model Coefficients") + 
+    coord_flip()
+}
+```
+
+Running Lasso Regression model for math.score
+```{r}
+target_variable <- 'math.score'
+run_lasso_reg(X_train, y_train[, target_variable], X_test, y_test[, target_variable],
+              cv_folds = 25, target_variable = target_variable,  y_scale_params)
+```
+
+Running Lasso Regression model for reading.score
+```{r}
+target_variable <- 'reading.score'
+run_lasso_reg(X_train, y_train[, target_variable], X_test, y_test[, target_variable],
+              cv_folds = 25, target_variable = target_variable,  y_scale_params)
+```
+
+Running Lasso Regression model for writing.score
+```{r}
+target_variable <- 'writing.score'
+run_lasso_reg(X_train, y_train[, target_variable], X_test, y_test[, target_variable],
+              cv_folds = 25, target_variable = target_variable,  y_scale_params)
+```
+
+### Gradient boosting regression
+
+For this work, since the dataset is relatively small, the GBR models were trained with 25-fold cross validation and exhaustive grid-search, in order to fine-tune the hyperparameters n.treesand interaction.depth. For shrinkage, since it was not that computationally expensive to run the models (for the sample size of $1000$) for large number of trees $N$, shrinkage was chosen to be set equal to $0.1$.
+
+Implementing the function for evaluation and for the model pipeline for Gradient Boosting model.
+```{r}
+# Using an ensemble multiple shallow decision trees (low depth level trees) for regression
+
+# Implementation Sources for GB:
+#          https://topepo.github.io/caret/model-training-and-tuning.html#preproc
+#          https://www.rdocumentation.org/packages/gbm/versions/2.1.8/topics/gbm
+#          http://uc-r.github.io/gbm_regression
+
+# For a gradient boosting machine (GBM) model, there are three main tuning parameters:
+# number of iterations, i.e. trees, (called n.trees in the gbm function)
+# complexity of the tree, called interaction.depth
+# learning rate: how quickly the algorithm adapts, called shrinkage
+
+run_gbm_reg <- function(X_train, y_train, X_test, y_test, cv_folds = 25, target_variable, y_scale_params){
+    # Set the k-fold CV
+    # (The verboseIter parameters is to print out the progress at each resamlping stage)
+    tc <- trainControl(method = "repeatedcv", number = cv_folds, repeats = 1, verbose=FALSE)
+    # Set the hyper-parameters to tune during the grid-search
+    gbmGrid <- expand.grid(interaction.depth = (1:4), n.trees = (3:40)*5,
+                             shrinkage = 0.1, n.minobsinnode = 10)
+    # Train the model with the k-fold cross validation
+    set.seed(420)
+    print("Training GB model with k-fold cross validation, will take some time")
+    gboost_model <- train(x = X_train, y = y_train, method="gbm",
+                         tuneGrid = gbmGrid, trControl=tc, maximize = FALSE, verbose=FALSE)
+    
+    # Shows the model training and parameter search procedure during k-fold cross validation
+    # gboost_model
+    
+    # Prediction and evaluation on training data (using original-uscaled target variables)
+    cat("\nEvaluation metrics for the training data: \n")
+    predictions_train <- predict(gboost_model, X_train)
+    print(eval_results(unPreProc(y_scale_params, y_train, target_variable),
+                        unPreProc(y_scale_params, predictions_train, target_variable)))
+    
+    # Prediction and evaluation on test data (using original-uscaled target variables)
+    cat("\nEvaluation metrics for the test data: \n")
+    predictions_test <- predict(gboost_model, X_test)
+    print(eval_results(unPreProc(y_scale_params, y_test, target_variable),
+                        unPreProc(y_scale_params, predictions_test, target_variable)))
+    
+    # Prints and plots the variable importances
+    # Using scale false in order to see the actual importannces and not the relative ones
+    plot(varImp(gboost_model, scale=FALSE))
+}
+```
+
+Running Gradient Boosting Regression model for math.score
+```{r}
+target_variable <- 'math.score'
+run_gbm_reg(X_train, y_train[, target_variable], X_test, y_test[, target_variable],
+              cv_folds = 25, target_variable = target_variable,  y_scale_params)
+```
+
+Running Gradient Boosting Regression model for reading.score
+```{r}
+target_variable <- 'reading.score'
+run_gbm_reg(X_train, y_train[, target_variable], X_test, y_test[, target_variable],
+              cv_folds = 25, target_variable = target_variable,  y_scale_params)
+```
+
+Running Gradient Boosting Regression model for writing.score
+```{r}
+target_variable <- 'writing.score'
+run_gbm_reg(X_train, y_train[, target_variable], X_test, y_test[, target_variable],
+              cv_folds = 25, target_variable = target_variable,  y_scale_params)
+```
+
+## Top and lowest total scores 
+Finally, the top and lowest scores are going to be checked manually for the total score:
+```{r}
+data.temp <-data.frame(data)
+data.temp$total <- data.temp$writing.score + data.temp$math.score + data.temp$reading.score
+
+kable(head(data.temp[order(data.temp$total),], 10))
+
+kable(head(data.temp[order(-data.temp$total),], 10))
+```
+
